@@ -1,0 +1,4 @@
+random-address==1.1.1
+names==0.3.0
+getindianname==1.0.7
+requests==2.31.0
