@@ -1,8 +1,10 @@
-import string
 import time
+import math
 import names
 import locale
+import string
 import random
+import secrets
 import getindianname
 from random_address import real_random_address
 
@@ -120,3 +122,14 @@ class Generator:
             return names.get_first_name() + " " + random.choice(self.nouns)
         else:
             return names.get_first_name() + " " + random.choice(self.adjectives) + " " + random.choice(self.nouns)
+
+    def random_alphanum(self, length: int) -> str:
+        if length == 0:
+            return ''
+        elif length < 0:
+            raise ValueError('Negative argument not allowed')
+        else:
+            text = secrets.token_hex(nbytes=math.ceil(length / 2))
+            is_length_even = length % 2 == 0
+            return text if is_length_even else text[1:]
+
