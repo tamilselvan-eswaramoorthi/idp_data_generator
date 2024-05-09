@@ -5,13 +5,14 @@ from generator import Generator
 class W2:
     def __init__(self) -> None:
         self.gen = Generator()
+        self.json_path = "fields/w2/w2.json"
         self.possible_12 =  ['A', 'AA', 'B', 'BB', 'C', 'D', 'E', 'EE',
                              'F', 'FF', 'G', 'GG', 'H', 'HH', 'II', 'J',
                              'K', 'L', 'M', 'N', 'P', 'Q', 'R', 'S', 'T', 
                              'V', 'W', 'Y', 'Z']
     
     def get_data(self):
-        with open("fields/w2.json", 'r') as f:
+        with open(self.json_path, 'r') as f:
             json_data = json.load(f)
         
         ## Employee
@@ -25,10 +26,10 @@ class W2:
         
         ##Employer
         json_data['employer']['ein'] = str(self.gen.get_number(num_digits=2)) + "-" + str(self.gen.get_number(num_digits=7))
-        json_data['employer']['name'] = self.gen.get_company_name()
+        employer_name = self.gen.get_company_name()
         address = self.gen.get_address()
-        address = address['address'] + '\n' + address['city'] + ', ' + address['state'] + ' ' + address['postal_code']
-        json_data['employer']['address'] = address
+        address = employer_name + "\n" + address['address'] + '\n' + address['city'] + ', ' + address['state'] + ' ' + address['postal_code']
+        json_data['employer']['name_address'] = address
 
         json_data['compensation']['assessment_year'] = random.choice(range(2015, 2025, 1))
 
@@ -56,15 +57,13 @@ class W2:
         for _ in range(random.randint(0, 4)):
             key = random.choice(self.possible_12)
             json_data['compensation']['12'][key] = self.gen.get_number(num_digits=random.choice(range(3, 6, 1)), decimal=2, currency="US", currency_symbol = False)
-        all_details = []
-        for _ in range(random.choice(range(0, 2))):
-            local_details = {}
-            local_details['state'] = employee_state.upper()
-            local_details['state_ein'] = str(self.gen.get_number(num_digits=2)) + "-" + str(self.gen.get_number(num_digits=7))
-            local_details['state_wages'] = self.gen.get_number(num_digits=random.choice(range(3, 6, 1)), decimal=2, currency="US", currency_symbol = False)
-            local_details['state_income_tax'] = "{:,.2f}".format(float(local_details['state_wages'].replace(',', ''))*(random.choice(range(1, 20, 2))/100))
-            local_details['local_wages'] = self.gen.get_number(num_digits=random.choice(range(3, 6, 1)), decimal=2, currency="US", currency_symbol = False)
-            local_details['local_income_tax'] = "{:,.2f}".format(float(local_details['local_wages'].replace(',', ''))*(random.choice(range(1, 20, 2))/100))
-            all_details.append(local_details)
-        json_data['local'] = all_details
+        
+        for idx in range(1, random.choice([2, 3])):
+            json_data['local']['state_'+str(idx)] = employee_state.upper()
+            json_data['local']['state_ein_'+str(idx)] = str(self.gen.get_number(num_digits=2)) + "-" + str(self.gen.get_number(num_digits=7))
+            json_data['local']['state_wages_'+str(idx)] = self.gen.get_number(num_digits=random.choice(range(3, 6, 1)), decimal=2, currency="US", currency_symbol = False)
+            json_data['local']['state_tax_'+str(idx)] = "{:,.2f}".format(float(json_data['local']['state_wages_'+str(idx)].replace(',', ''))*(random.choice(range(1, 20, 2))/100))
+            json_data['local']['local_wages_'+str(idx)] = self.gen.get_number(num_digits=random.choice(range(3, 6, 1)), decimal=2, currency="US", currency_symbol = False)
+            json_data['local']['local_tax_'+str(idx)] = "{:,.2f}".format(float(json_data['local']['local_wages_'+str(idx)].replace(',', ''))*(random.choice(range(1, 20, 2))/100))
+                    
         return json_data

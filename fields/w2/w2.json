@@ -4,13 +4,14 @@
         "last_name": "",
         "suffix": "",
         "address": "",
-        "social_security_number": ""
+        "ssn": "",
+        "control_number": ""
     },
     "employer": {
         "ein": "",
-        "name": "",
-        "address": ""
+        "name_address": ""
     },
+    
     "compensation": {
         "assessment_year": "",
         "wages": "",
@@ -26,16 +27,24 @@
         "statutory_employee": "",
         "retirement_plan": "",
         "3rd_sick_pay": "",
-        "12a": "",
-        "12b": "",
-        "12c": "",
-        "12d": "",
-        "other": "",
-        "state": "",
-        "state_wages": "",
-        "state_income_tax": "",
-        "local_wages": "",
-        "local_income_tax": "",
-        "locality_name": ""
+        "12": "",
+        "other": ""
+    },
+    "local": 
+        {
+        "state_1": "",
+        "state_ein_1": "",
+        "state_wages_1": "",
+        "state_tax_1": "",
+        "local_wages_1": "",
+        "local_tax_1": "",
+        "locality_1": "",
+        "state_2": "",
+        "state_ein_2": "",
+        "state_wages_2": "",
+        "state_tax_2": "",
+        "local_wages_2": "",
+        "local_tax_2": "",
+        "locality_2": ""
     }
 }
