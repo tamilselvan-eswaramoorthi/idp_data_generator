@@ -19,7 +19,11 @@ class W2:
         json_data['employee']['suffix'], json_data['employee']['first_name'], json_data['employee']['last_name']  = self.gen.get_name(suffix=True).split(' ')
         address = self.gen.get_address()
         employee_state = address['state']
-        address = address['address'] + '\n' + address['city'] + ', ' + address['state'] + ' ' + address['postal_code']
+        if "city" in address.keys():
+            address = address['address'] + '\n' + address['city'] + ', ' + address['state'] + ' ' + address['postal_code']
+        else:
+            address = address['address'] + '\n' + address['state'] + ' ' + address['postal_code']
+
         json_data['employee']['address'] = address
         json_data['employee']['ssn'] = str(self.gen.get_number(num_digits=3)) + "-" + str(self.gen.get_number(num_digits=2)) + "-" + str(self.gen.get_number(num_digits=4))
         json_data['employee']['control_number'] = self.gen.random_alphanum(random.choice(range(6, 10)))
@@ -28,7 +32,11 @@ class W2:
         json_data['employer']['ein'] = str(self.gen.get_number(num_digits=2)) + "-" + str(self.gen.get_number(num_digits=7))
         employer_name = self.gen.get_company_name()
         address = self.gen.get_address()
-        address = employer_name + "\n" + address['address'] + '\n' + address['city'] + ', ' + address['state'] + ' ' + address['postal_code']
+        if "city" in address.keys():
+            address = employer_name + "\n" + address['address'] + '\n' + address['city'] + ', ' + address['state'] + ' ' + address['postal_code']
+        else:
+            address = employer_name + "\n" + address['address'] + '\n' + address['state'] + ' ' + address['postal_code']
+        
         json_data['employer']['name_address'] = address
 
         json_data['compensation']['assessment_year'] = random.choice(range(2015, 2025, 1))

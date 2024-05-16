@@ -1,8 +1,14 @@
-from PyPDF2 import PdfReader, PdfWriter
-from PyPDF2.generic import BooleanObject, NameObject, IndirectObject, TextStringObject
+import cv2
+import fitz
+import numpy as np
+from PIL import Image
+import augraphy as aug
+from pypdf import PdfReader, PdfWriter
+from pypdf.generic import BooleanObject, NameObject, IndirectObject, TextStringObject, NumberObject
 
 class Create_W2:
     def __init__(self):
+        self.zoom = 3
         self.template_path = "fields/w2/w2.pdf"
         self.box_12_map = {'a': 'a_value', 'b': 'b_value', 'c': 'c_value', 'd': 'd_value'}
         
@@ -23,7 +29,7 @@ class Create_W2:
         # field.update({NameObject('/Q'): TextStringObject("0")})  # 0 for left alignment
         return field
 
-    def fill_pdf(self, json_data, save_path):
+    def fill_pdf(self, json_data, save_path, freeze = False):
         box_12_dict = {}
         for key, value in self.box_12_map.items():
             box_12_dict[key] = ''
@@ -39,9 +45,8 @@ class Create_W2:
             "statutory_employee": int(json_data['compensation']['statutory_employee']),
         }
 
-
         output = PdfWriter()
-        output = self.set_need_appearances_writer(output)
+        # output = self.set_need_appearances_writer(output)
 
         with open(self.template_path, 'rb') as f:
             pdf = PdfReader(f)
@@ -71,8 +76,44 @@ class Create_W2:
                     key, value = buttons.popitem()
                     
                     field.update({NameObject("/V"): NameObject("/"+str(value))})
+                if freeze:
+                    field.update({NameObject("/Ff"): NumberObject(1)})
 
             output.add_page(page)
 
             with open(save_path, 'wb') as output_file:
                 output.write(output_file)
+
+    def pdf_to_image(self, pdf_path):
+        doc = fitz.open(pdf_path)
+        images = []
+        for page in doc:
+            mat = fitz.Matrix(self.zoom, self.zoom)
+            pix = page.get_pixmap(matrix = mat, alpha = False)
+            img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
+            images.append(np.array(img))
+        cv2.imwrite("image.png", images[0])
+        return images
+
+    def augment(self, pdf_path, output_path, probability=0.5):
+        images = self.pdf_to_image(pdf_path)
+        ink_phase = [aug.OneOf([aug.Dithering(p=probability/2),
+                                aug.InkBleed(p=probability/2)], p=probability)]
+        paper_phase = [aug.ColorPaper(p=probability/2),
+                       aug.OneOf([aug.AugmentationSequence([
+                                aug.NoiseTexturize(p=probability/2),  
+                                aug.BrightnessTexturize(p=probability/2)])
+                                ])]
+        post_phase = [aug.Markup(p=probability),
+                      aug.PageBorder(p=probability),
+                      aug.SubtleNoise(p=probability),
+                      aug.Jpeg(p=probability),
+                    #   aug.PencilScribbles(p=probability),
+                      aug.BleedThrough(p=probability)]
+        pipeline = aug.AugraphyPipeline(ink_phase, paper_phase, post_phase)
+        synthetic_images = [pipeline.augment(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))["output"] for image in images]
+        synthetic_images = [Image.fromarray(image).convert('RGB') for image in synthetic_images]
+
+        synthetic_images[0].save(output_path,
+                                 save_all=True, 
+                                 append_images=synthetic_images)
