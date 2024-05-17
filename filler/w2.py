@@ -1,8 +1,8 @@
 import cv2
-import fitz
-import numpy as np
 from PIL import Image
 import augraphy as aug
+from pdf2image import convert_from_path
+
 from pypdf import PdfReader, PdfWriter
 from pypdf.generic import BooleanObject, NameObject, IndirectObject, TextStringObject, NumberObject
 
@@ -46,7 +46,7 @@ class Create_W2:
         }
 
         output = PdfWriter()
-        # output = self.set_need_appearances_writer(output)
+        output = self.set_need_appearances_writer(output)
 
         with open(self.template_path, 'rb') as f:
             pdf = PdfReader(f)
@@ -85,14 +85,12 @@ class Create_W2:
                 output.write(output_file)
 
     def pdf_to_image(self, pdf_path):
-        doc = fitz.open(pdf_path)
+        images_pil = convert_from_path(pdf_path)
         images = []
-        for page in doc:
-            mat = fitz.Matrix(self.zoom, self.zoom)
-            pix = page.get_pixmap(matrix = mat, alpha = False)
-            img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
-            images.append(np.array(img))
-        cv2.imwrite("image.png", images[0])
+        for img in images_pil:
+            img.save(f'temp.png', 'PNG')
+            img = cv2.imread("temp.png")
+            images.append(img)
         return images
 
     def augment(self, pdf_path, output_path, probability=0.5):
@@ -113,7 +111,10 @@ class Create_W2:
         pipeline = aug.AugraphyPipeline(ink_phase, paper_phase, post_phase)
         synthetic_images = [pipeline.augment(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))["output"] for image in images]
         synthetic_images = [Image.fromarray(image).convert('RGB') for image in synthetic_images]
+        if len(synthetic_images) == 1:
+            synthetic_images[0].save(output_path)
+        else:
+            synthetic_images[0].save(output_path,
+                                    save_all=True, 
+                                    append_images=synthetic_images)
 
-        synthetic_images[0].save(output_path,
-                                 save_all=True, 
-                                 append_images=synthetic_images)
