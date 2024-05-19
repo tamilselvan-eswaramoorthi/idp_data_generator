@@ -6,3 +6,4 @@ augraphy==8.2.6
 opencv-python-headless==4.9.0.80
 pypdf
 tqdm
+pdfminer

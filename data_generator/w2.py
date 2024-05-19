@@ -5,7 +5,7 @@ from data_generator.generator import Generator
 class W2:
     def __init__(self) -> None:
         self.gen = Generator()
-        self.json_path = "fields/w2/w2.json"
+        self.json_path = "static/fields/w2/w2.json"
         self.possible_12 =  ['A', 'AA', 'B', 'BB', 'C', 'D', 'E', 'EE',
                              'F', 'FF', 'G', 'GG', 'H', 'HH', 'II', 'J',
                              'K', 'L', 'M', 'N', 'P', 'Q', 'R', 'S', 'T', 
