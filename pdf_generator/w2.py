@@ -5,42 +5,27 @@ from PIL import Image
 import augraphy as aug
 from pdf2image import convert_from_path
 
-from pypdf import PdfReader, PdfWriter
-from pypdf.generic import BooleanObject, NameObject, IndirectObject, TextStringObject, NumberObject
+from pypdf import PdfReader
+from PyPDFForm import PdfWrapper
 
 from pdfminer.pdfpage import PDFPage
 from pdfminer.converter import PDFPageAggregator
 from pdfminer.layout import LAParams, LTText, LTChar, LTAnno
 from pdfminer.pdfinterp import PDFPageInterpreter, PDFResourceManager
 
-def combine_bounding_boxes(bounding_boxes):
-    # Initialize with extreme values to find minimum and maximum coordinates
-    x_min_combined, y_min_combined = float('inf'), float('inf')
-    x_max_combined, y_max_combined = float('-inf'), float('-inf')
-
-    # Iterate through each bounding box
-    for bbox in bounding_boxes:
-        x_min, y_min, x_max, y_max = bbox
-        x_min_combined = min(x_min_combined, x_min)
-        y_min_combined = min(y_min_combined, y_min)
-        x_max_combined = max(x_max_combined, x_max)
-        y_max_combined = max(y_max_combined, y_max)
-
-    # Create the combined bounding box
-    combined_bbox = (x_min_combined, y_min_combined, x_max_combined, y_max_combined)
-    return combined_bbox
+from .utils import combine_bounding_boxes
 
 class Create_W2:
     def __init__(self):
         self.zoom = 3
         self.template_path = "static/fields/w2/w2.pdf"
-        self.box_12_map = {'a': 'a_value', 'b': 'b_value', 'c': 'c_value', 'd': 'd_value'}
-        self.template_bbox = self.extract_text_and_bounding_boxes(self.template_path)
-        
+        self.box_12_map = {'a': 'a_value', 'b': 'b_value', 'c': 'c_value', 'd': 'd_value'}        
         doc = fitz.open(self.template_path)
         self.width = doc[0].rect.width
         self.height = doc[0].rect.height
         self.resolution_factor = 2
+        self.filled_pdf_colour = (0, 0, 0)
+        self.filled_pdf_fold = 'Helvetica'
 
     def extract_text_and_bounding_boxes(self, pdf_path):
         with open(pdf_path, 'rb') as fp:
@@ -79,25 +64,8 @@ class Create_W2:
                                         text += char
                                         bbox.append(letter.bbox)
         return bb_text
-
-    def set_need_appearances_writer(self, writer: PdfWriter):
-        try:
-            catalog = writer._root_object
-            if "/AcroForm" not in catalog:
-                writer._root_object.update({NameObject("/AcroForm"): IndirectObject(len(writer._objects), 0, writer)})
-            need_appearances = NameObject("/NeedAppearances")
-            writer._root_object["/AcroForm"][need_appearances] = BooleanObject(True)
-            return writer
-
-        except Exception as e:
-            return writer
     
-    def _change_style(self, field):
-        field.update({NameObject('/DA'): TextStringObject("/HelveticaLTStd 8.00 Tf 0.000 0.000 0.000 rg")}) 
-        # field.update({NameObject('/Q'): TextStringObject("0")})  # 0 for left alignment
-        return field
-
-    def fill_pdf(self, json_data, save_path, freeze = False):
+    def fill_pdf(self, json_data, save_path):
         box_12_dict = {}
         for key, value in self.box_12_map.items():
             box_12_dict[key] = ''
@@ -108,15 +76,12 @@ class Create_W2:
             box_12_dict[self.box_12_map[map_key]] = json_data['compensation']["12"][json_key]
 
         buttons = {
-            "3rd_sick_pay": int(json_data['compensation']['3rd_sick_pay']),
-            "retirement_plan": int(json_data['compensation']['retirement_plan']),
-            "statutory_employee": int(json_data['compensation']['statutory_employee']),
+            "3rd_sick_pay": bool(json_data['compensation']['3rd_sick_pay']),
+            "retirement_plan": bool(json_data['compensation']['retirement_plan']),
+            "statutory_employee": bool(json_data['compensation']['statutory_employee']),
         }
 
-        output = PdfWriter()
-        output = self.set_need_appearances_writer(output)
-        filled_bbox = []
-
+        pdf_dict = {}
         with open(self.template_path, 'rb') as f:
             pdf = PdfReader(f)
             page = pdf.pages[0]
@@ -126,45 +91,37 @@ class Create_W2:
                 field_type = field.get('/FT')
                 field_value = field.get('/V')
                 if field_value is not None and field_type == '/Tx':
-                    if field_value in json_data['employee']:
-                        field.update({NameObject('/V'): TextStringObject(json_data['employee'][field_value])})
-                        field = self._change_style(field)
-                        filled_bbox.append({'text': json_data['employee'][field_value], 'bbox': [ int(coord) for coord in field.get('/Rect')]})
-                    
-                    elif field_value in json_data['employer']:
-                        field.update({NameObject('/V'): TextStringObject(json_data['employer'][field_value])})
-                        field = self._change_style(field)
-                        filled_bbox.append({'text': json_data['employer'][field_value], 'bbox': [ int(coord) for coord in field.get('/Rect')]})
-
-                    elif field_value in json_data['compensation']:
-                        field.update({NameObject('/V'): TextStringObject(json_data['compensation'][field_value])})
-                        field = self._change_style(field)
-                        filled_bbox.append({'text': json_data['compensation'][field_value], 'bbox': [ int(coord) for coord in field.get('/Rect')]})
-
-                    elif field_value in ['a', 'b', 'c', 'd', 'a_value', 'b_value', 'c_value', 'd_value']:
-                        field.update({NameObject('/V'): TextStringObject(box_12_dict[field_value])})
-                        field = self._change_style(field)
-                        filled_bbox.append({'text': box_12_dict[field_value], 'bbox': [ int(coord) for coord in field.get('/Rect')]})
-
-                    elif field_value.endswith('_1') or field_value.endswith('_2'):
-                        field.update({NameObject('/V'): TextStringObject(json_data['local'][field_value])})
-                        field = self._change_style(field)
-                        filled_bbox.append({'text': json_data['local'][field_value], 'bbox': [ int(coord) for coord in field.get('/Rect')]})
-
+                    pdf_dict[field.get('/V')] = field.get('/T')
                 elif field_type == '/Btn' :
                     key, value = buttons.popitem()
-                    field.update({NameObject("/V"): NameObject("/"+str(value))})
-        
-                if freeze:
-                    field.update({NameObject("/Ff"): NumberObject(1)})
+                    pdf_dict[value] = field.get('/T')
 
-            output.add_page(page)
+        filler_dict = {}
+        for field_value, field_text in pdf_dict.items():
+            if isinstance(field_value, bool):
+                filler_dict[field_text] = field_value
+            elif field_value in json_data['employee']:
+                filler_dict[field_text] = json_data['employee'][field_value]
+            elif field_value in json_data['employer']:
+                filler_dict[field_text] = json_data['employer'][field_value]
+            elif field_value in json_data['compensation']:
+                filler_dict[field_text] = json_data['compensation'][field_value]
+            elif field_value in ['a', 'b', 'c', 'd', 'a_value', 'b_value', 'c_value', 'd_value']:
+                filler_dict[field_text] = box_12_dict[field_value]
+            elif field_value.endswith('_1') or field_value.endswith('_2'):
+                filler_dict[field_text] = json_data['local'][field_value]
+            else:
+                raise("no field found")
 
-            with open(save_path, 'wb') as output_file:
-                output.write(output_file)
 
-        bbox = self.template_bbox + filled_bbox
-        return bbox
+        filled_pdf = PdfWrapper(self.template_path, 
+                                global_font_color=self.filled_pdf_colour, 
+                                global_font=self.filled_pdf_fold).fill(filler_dict)
+
+        with open(save_path, "wb+") as output:
+            output.write(filled_pdf.read())
+
+        return self.extract_text_and_bounding_boxes(save_path)
 
     def pdf_to_image(self, pdf_path):
         image_save_path = pdf_path.replace('.pdf', '.png')

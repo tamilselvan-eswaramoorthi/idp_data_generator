@@ -11,5 +11,5 @@ num_files = 1
 for i in tqdm(range(num_files)):
     file_path = os.path.join(base_path, f'w2_{uuid.uuid4()}.pdf')
     json_data = data_gen.get_data()
-    bbox = pdf_gen.fill_pdf(json_data, file_path, freeze=False)
+    bbox = pdf_gen.fill_pdf(json_data, file_path)
     pdf_gen.augment(bbox, file_path, file_path.replace('.pdf', '_aug.pdf'))
