@@ -1,6 +1,6 @@
 import json
 import random 
-from generator import Generator
+from data_generator.generator import Generator
 
 class W2:
     def __init__(self) -> None:
