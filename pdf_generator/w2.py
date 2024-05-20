@@ -2,7 +2,6 @@ import os
 import cv2
 import json
 import fitz
-import time
 import numpy as np
 from PIL import Image
 from tqdm import tqdm
