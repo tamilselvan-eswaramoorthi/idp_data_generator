@@ -2,14 +2,15 @@ import os
 import cv2
 import json
 import fitz
-import uuid
+import time
 import numpy as np
 from PIL import Image
 from tqdm import tqdm
-from pdf2image import convert_from_path
+import concurrent.futures
 
 from pypdf import PdfReader
 from PyPDFForm import PdfWrapper
+from pdf2image import convert_from_path
 
 from pdfminer.pdfpage import PDFPage
 from pdfminer.converter import PDFPageAggregator
@@ -24,6 +25,8 @@ from .utils import combine_bounding_boxes, convert_xyxy_to_8_cords
 class CreateW2:
     def __init__(self, base_path):
         self.zoom = 3
+        self.timeout = 10
+        self.num_workers = 5
         self.template_path = "static/fields/w2.pdf"
         self.box_12_map = {'a': 'a_value', 'b': 'b_value', 'c': 'c_value', 'd': 'd_value'}
         self.doc = fitz.open(self.template_path)
@@ -182,7 +185,7 @@ class CreateW2:
             cv2.imwrite(image_path, draw_image)
 
     def generate_pdfs(self, num_files, augment=True, draw_bb=False):
-        for i in tqdm(range(num_files)):
+        def wrapper_generate_pdf(i):
             self.generate_pdf(
                 os.path.join(self.image_path, f'{i}.png'),
                 os.path.join(self.text_path, f'{i}.txt'),
@@ -191,3 +194,11 @@ class CreateW2:
                 augment=augment,
                 draw_bb=draw_bb
             )
+        
+        with concurrent.futures.ThreadPoolExecutor(max_workers=self.num_workers) as executor:
+            for i in tqdm(range(num_files)):
+                future = executor.submit(wrapper_generate_pdf, i)
+                try:
+                    future.result(timeout=self.timeout)
+                except concurrent.futures.TimeoutError:
+                    print(f"Skipping file {i} as it took more than {self.timeout} seconds to process")
