@@ -6,53 +6,38 @@ def get_augment_pipeline(probability):
         aug.OneOf(
             [
                 aug.Dithering(
-                    p=probability/2),
-                    aug.BleedThrough(
-                                intensity_range=(0.1, 0.3),
-                                color_range=(32, 224),
-                                ksize=(17, 17),
-                                sigmaX=1,
-                                alpha=random.uniform(0.1, 0.2),
-                                offsets=(10, 20),
-                                p=probability/4,
-                            ),
-                    aug.InkBleed(intensity_range=(0.5, 0.6), 
-                                    kernel_size=random.choice([(5, 5), (3, 3)]),
-                                    severity=(0.2, 0.4),
-                                    p=probability/4
-                            )
-                        ],
+                    p=probability/4
+                    ),
+                aug.BleedThrough(
+                    intensity_range=(0.1, 0.2),
+                    color_range=(32, 224),
+                    alpha=random.uniform(0.1, 0.2),
+                    offsets=(10, 20),
+                    p=probability/4,
+                    ),
+                aug.InkBleed(
+                    intensity_range=(0.5, 0.6),
+                    kernel_size=random.choice([(5, 5), (3, 3)]),
+                    severity=(0.2, 0.4),
+                    p=probability/4
+                    )
+            ],
             p=probability/2
             )
         ]
     
     paper_phase = [
-        # aug.ColorPaper(p=probability/2),
+        aug.ColorPaper(p=probability/10),
         aug.OneOf(
             [
                 aug.DelaunayTessellation(
-                    n_points_range=(500, 800),
-                    n_horizontal_points_range=(500, 800),
-                    n_vertical_points_range=(500, 800),
-                    noise_type="random",
-                    color_list="default",
-                    color_list_alternate="default",
                     p=probability/3
                 ),
                 aug.PatternGenerator(
-                    imgx=random.randint(256, 512),
-                    imgy=random.randint(256, 512),
-                    n_rotation_range=(10, 15),
-                    color="random",
                     alpha_range=(0.25, 0.5),
                     p=probability/3
                 ),
                 aug.VoronoiTessellation(
-                    mult_range=(50, 80),
-                    seed=19829813472,
-                    num_cells_range=(500, 1000),
-                    noise_type="random",
-                    background_value=(200, 255),
                     p=probability/3
                 ),
             ], 
@@ -89,11 +74,11 @@ def get_augment_pipeline(probability):
                     scanline_type=0,
                 ),
             ],
-            p=probability/2,
+            p=probability/4,
         ),
         aug.SubtleNoise(
             subtle_range=random.randint(5, 10),
-            p=probability/2,
+            p=probability/4,
         ),
         aug.Jpeg(
             quality_range=(25, 95),
@@ -123,7 +108,7 @@ def get_augment_pipeline(probability):
                     scribbles_lines_stroke_count_range=(1, 6),
                 ),
             ],
-            p=probability,
+            p=probability/4,
         ),
         aug.ColorShift(
             color_shift_offset_x_range=(3, 5),
@@ -131,7 +116,7 @@ def get_augment_pipeline(probability):
             color_shift_iterations=(2, 3),
             color_shift_brightness_range=(0.9, 1.1),
             color_shift_gaussian_kernel_range=(3, 3),
-            p=probability/3,
+            p=probability/4,
         ),
         aug.BadPhotoCopy(
             noise_type=-1,
@@ -145,7 +130,7 @@ def get_augment_pipeline(probability):
             blur_noise_kernel=random.choice([(3, 3), (5, 5), (7, 7)]),
             wave_pattern=random.choice([True, False]),
             edge_effect=random.choice([True, False]),
-            p=probability/3,
+            p=probability/4,
         ),
         aug.Faxify(
             scale_range=(0.3, 0.6),

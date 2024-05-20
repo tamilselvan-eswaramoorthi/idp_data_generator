@@ -13,13 +13,15 @@ from pdfminer.converter import PDFPageAggregator
 from pdfminer.layout import LAParams, LTText, LTChar, LTAnno
 from pdfminer.pdfinterp import PDFPageInterpreter, PDFResourceManager
 
+from data_generator.w2 import W2
+
 from .augment import get_augment_pipeline
 from .utils import combine_bounding_boxes, convert_xyxy_to_8_cords
 
 class Create_W2:
     def __init__(self):
         self.zoom = 3
-        self.template_path = "static/fields/w2/w2.pdf"
+        self.template_path = "static/fields/w2.pdf"
         self.box_12_map = {'a': 'a_value', 'b': 'b_value', 'c': 'c_value', 'd': 'd_value'}        
         doc = fitz.open(self.template_path)
         self.width = doc[0].rect.width
@@ -27,6 +29,7 @@ class Create_W2:
         self.resolution_factor = 2
         self.filled_pdf_colour = (0, 0, 0)
         self.filled_pdf_fold = 'Helvetica'
+        self.data_gen = W2()
 
     def extract_text_and_bounding_boxes(self, pdf_path):
         with open(pdf_path, 'rb') as fp:
@@ -66,23 +69,11 @@ class Create_W2:
                                         bbox.append(letter.bbox)
         return bb_text
     
-    def fill_pdf(self, json_data, save_path, save_json = True):
-        box_12_dict = {}
-        for key, value in self.box_12_map.items():
-            box_12_dict[key] = ''
-            box_12_dict[value] = ''
-
-        for json_key, map_key in zip(json_data['compensation']["12"].keys(), list(self.box_12_map.keys())[:len(json_data['compensation']["12"])]):
-            box_12_dict[map_key] = json_key
-            box_12_dict[self.box_12_map[map_key]] = json_data['compensation']["12"][json_key]
-
-        buttons = {
-            "3rd_sick_pay": bool(json_data['compensation']['3rd_sick_pay']),
-            "retirement_plan": bool(json_data['compensation']['retirement_plan']),
-            "statutory_employee": bool(json_data['compensation']['statutory_employee']),
-        }
-
+    def fill_pdf(self, form_fields, save_path, save_json = True):
+        
+        fields = form_fields['field_details']
         pdf_dict = {}
+        checkbox_fields = []
         with open(self.template_path, 'rb') as f:
             pdf = PdfReader(f)
             page = pdf.pages[0]
@@ -94,26 +85,18 @@ class Create_W2:
                 if field_value is not None and field_type == '/Tx':
                     pdf_dict[field.get('/V')] = field.get('/T')
                 elif field_type == '/Btn' :
-                    key, value = buttons.popitem()
-                    pdf_dict[value] = field.get('/T')
+                    checkbox_fields.append(field.get('/T'))
+        
 
+        #handles checkboxes
         filler_dict = {}
+        for field_text, field_value in zip(checkbox_fields, form_fields['button_details'].values()):
+            filler_dict[field_text] = field_value
+        
+        #handles fields
         for field_value, field_text in pdf_dict.items():
-            if isinstance(field_value, bool):
-                filler_dict[field_text] = field_value
-            elif field_value in json_data['employee']:
-                filler_dict[field_text] = json_data['employee'][field_value]
-            elif field_value in json_data['employer']:
-                filler_dict[field_text] = json_data['employer'][field_value]
-            elif field_value in json_data['compensation']:
-                filler_dict[field_text] = json_data['compensation'][field_value]
-            elif field_value in ['a', 'b', 'c', 'd', 'a_value', 'b_value', 'c_value', 'd_value']:
-                filler_dict[field_text] = box_12_dict[field_value]
-            elif field_value.endswith('_1') or field_value.endswith('_2'):
-                filler_dict[field_text] = json_data['local'][field_value]
-            else:
-                raise("no field found")
-
+            if field_value in fields.keys():
+                filler_dict[field_text] = fields[field_value]
 
         filled_pdf = PdfWrapper(self.template_path, 
                                 global_font_color=self.filled_pdf_colour, 
@@ -125,19 +108,19 @@ class Create_W2:
         if save_json:
             json_path = save_path.replace('.pdf', '.json')
             with open(json_path, 'w') as json_write_file:
-                json.dump(json_data, json_write_file, indent=4)
+                json.dump(form_fields, json_write_file, indent=4)
 
         return self.extract_text_and_bounding_boxes(save_path)
 
-    def pdf_to_image(self, pdf_path):
+    def pdf_to_image(self, pdf_path, save_png = True):
         images_pil = convert_from_path(pdf_path, size = (self.width*self.resolution_factor, self.height*self.resolution_factor))
         images = []
         image_paths = []
         for i, img in enumerate(images_pil):
             image_save_path = pdf_path.replace('.pdf', f'_{i}.png')
-            img.save(image_save_path, 'PNG')
-            img = cv2.imread(image_save_path)
-            images.append(img)
+            if save_png:
+                img.save(image_save_path, 'PNG')
+            images.append(np.array(img))
             image_paths.append(image_save_path)
         return images, image_paths
 
@@ -149,34 +132,42 @@ class Create_W2:
         bbox[3] = height - bbox[3] - shift
         return bbox
 
-    def augment(self, bboxes, pdf_path, output_path, probability = 0.5, save_png = True, save_txt = True, draw_bb = True):
+    def generate_pdf(self, output_path, probability = 0.5, augment = True, save_png = True, save_txt = True, draw_bb = False):
+        pdf_path = output_path + '.pdf'
+
+        json_data = self.data_gen.get_data()
+
+        bboxes = self.fill_pdf(json_data, pdf_path)
+
         images, image_paths = self.pdf_to_image(pdf_path)
-        height, width, _ = images[0].shape
 
-        for idx in range(len(bboxes)):
-            [x1, y1, x2, y2] = bboxes[idx]['bbox']
-            bboxes[idx]['bbox'] = self.flip_bbox([x1* self.resolution_factor,
-                                                  y1* self.resolution_factor, 
-                                                  x2* self.resolution_factor, 
-                                                  y2* self.resolution_factor], height)
-        
-        synthetic_images = []
-        aug_pipeline = get_augment_pipeline(probability=probability)
-        for idx, image in enumerate(images):
-            image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-            synthetic_image = aug_pipeline.augment(image)["output"]
-            synthetic_image = Image.fromarray(synthetic_image).convert('RGB')
-            synthetic_images.append(synthetic_image)
-            if save_png:
-                aug_image_path = pdf_path.replace('.pdf', f'_aug_{idx}.png')
-                synthetic_image.save(aug_image_path)
+        if augment:
+            height, width, _ = images[0].shape
 
-        if len(synthetic_images) == 1:
-            synthetic_images[0].save(output_path)
-        else:
-            synthetic_images[0].save(output_path,
-                                    save_all=True, 
-                                    append_images=synthetic_images)
+            for idx in range(len(bboxes)):
+                [x1, y1, x2, y2] = bboxes[idx]['bbox']
+                bboxes[idx]['bbox'] = self.flip_bbox([x1* self.resolution_factor,
+                                                    y1* self.resolution_factor, 
+                                                    x2* self.resolution_factor, 
+                                                    y2* self.resolution_factor], height)
+            
+            synthetic_images = []
+            aug_pipeline = get_augment_pipeline(probability=probability)
+            for idx, image in enumerate(images):
+                image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+                synthetic_image = aug_pipeline.augment(image)["output"]
+                synthetic_image = Image.fromarray(synthetic_image).convert('RGB')
+                synthetic_images.append(synthetic_image)
+                if save_png:
+                    aug_image_path = pdf_path.replace('.pdf', f'_{idx}.png')
+                    synthetic_image.save(aug_image_path)
+
+            if len(synthetic_images) == 1:
+                synthetic_images[0].save(pdf_path)
+            else:
+                synthetic_images[0].save(pdf_path,
+                                        save_all=True, 
+                                        append_images=synthetic_images)
 
         if save_txt:
             txt_path = pdf_path.replace('.pdf', '.txt')
@@ -184,10 +175,13 @@ class Create_W2:
                 for boxes in bboxes:
                     text, bbox = boxes['text'], convert_xyxy_to_8_cords(boxes['bbox'])
                     txt_write_file.write(','.join(list(map(str, bbox))) + "," + text + '\n')
+        
         if draw_bb:
-            frame = np.array(synthetic_images[0])
+            if augment:
+                draw_image = np.array(synthetic_images[0])
+            else:
+                draw_image = images[0]
             for box in bboxes:
                 x1, y1, x2, y2 = box['bbox']
-                # text = d['text']
-                cv2.rectangle(frame, (int(x1), int(y1)), (int(x2), int(y2) ), (0, 0, 255), thickness = 1)
-            cv2.imwrite(image_paths[0].replace('.png', '_with_bb.png'), frame)
+                cv2.rectangle(draw_image, (int(x1), int(y1)), (int(x2), int(y2) ), (0, 0, 255), thickness = 1)
+            cv2.imwrite(image_paths[0], draw_image)
