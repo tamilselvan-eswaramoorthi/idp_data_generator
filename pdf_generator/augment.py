@@ -70,7 +70,8 @@ def get_augment_pipeline(probability):
         ]
 
     post_phase = [
-        #aug.PageBorder(p=probability),
+        # aug.PageBorder(p=probability),
+        # aug.Geometric(p=probability/2),
         aug.OneOf(
             [
                 aug.DirtyDrum(

@@ -17,7 +17,7 @@ from .augment import get_augment_pipeline
 from .utils import combine_bounding_boxes, convert_xyxy_to_8_cords
 
 class Create_W2:
-    def __init__(self, probability = 0.5):
+    def __init__(self):
         self.zoom = 3
         self.template_path = "static/fields/w2/w2.pdf"
         self.box_12_map = {'a': 'a_value', 'b': 'b_value', 'c': 'c_value', 'd': 'd_value'}        
@@ -27,7 +27,6 @@ class Create_W2:
         self.resolution_factor = 2
         self.filled_pdf_colour = (0, 0, 0)
         self.filled_pdf_fold = 'Helvetica'
-        self.aug_pipeline = get_augment_pipeline(probability=probability)
 
     def extract_text_and_bounding_boxes(self, pdf_path):
         with open(pdf_path, 'rb') as fp:
@@ -150,29 +149,34 @@ class Create_W2:
         bbox[3] = height - bbox[3] - shift
         return bbox
 
-    def augment(self, bboxes, pdf_path, output_path, save_png = True, save_txt = True, draw_bb = True):
+    def augment(self, bboxes, pdf_path, output_path, probability = 0.5, save_png = True, save_txt = True, draw_bb = True):
         images, image_paths = self.pdf_to_image(pdf_path)
+        height, width, _ = images[0].shape
 
         for idx in range(len(bboxes)):
             [x1, y1, x2, y2] = bboxes[idx]['bbox']
             bboxes[idx]['bbox'] = self.flip_bbox([x1* self.resolution_factor,
                                                   y1* self.resolution_factor, 
                                                   x2* self.resolution_factor, 
-                                                  y2* self.resolution_factor], images[0].shape[0])
+                                                  y2* self.resolution_factor], height)
+        
+        synthetic_images = []
+        aug_pipeline = get_augment_pipeline(probability=probability)
+        for idx, image in enumerate(images):
+            image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+            synthetic_image = aug_pipeline.augment(image)["output"]
+            synthetic_image = Image.fromarray(synthetic_image).convert('RGB')
+            synthetic_images.append(synthetic_image)
+            if save_png:
+                aug_image_path = pdf_path.replace('.pdf', f'_aug_{idx}.png')
+                synthetic_image.save(aug_image_path)
 
-        synthetic_images = [self.aug_pipeline.augment(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))["output"] for image in images]
-
-        synthetic_images = [Image.fromarray(image).convert('RGB') for image in synthetic_images]
         if len(synthetic_images) == 1:
             synthetic_images[0].save(output_path)
         else:
             synthetic_images[0].save(output_path,
                                     save_all=True, 
                                     append_images=synthetic_images)
-        if save_png:
-            for idx, img in enumerate(synthetic_images):
-                aug_image_path = pdf_path.replace('.pdf', f'_aug_{idx}.png')
-                img.save(aug_image_path)
 
         if save_txt:
             txt_path = pdf_path.replace('.pdf', '.txt')
