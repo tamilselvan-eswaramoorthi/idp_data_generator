@@ -18,10 +18,7 @@ def combine_bounding_boxes(bounding_boxes):
     combined_bbox = (x_min_combined, y_min_combined, x_max_combined, y_max_combined)
     return combined_bbox
 
-def draw_bb(name):
-    frame = cv2.imread(f"data/{name}.png")
-    for d in json.load(open(f"data/{name}.json", "rb")):
-        x1, y1, x2, y2 = d['bbox']
-        text = d['text']
-        cv2.rectangle(frame, (int(x1), int(y1)), (int(x2), int(y2) ), (0, 0, 255), thickness = 1)
-    cv2.imwrite('temp.png', frame)
+def convert_xyxy_to_8_cords(box):
+    x1, y1, x2, y2 = box
+    x1, y1, x2, y2 = int(x1), int(y1), int(x2), int(y2)
+    return [x1, y1, x2, y1, x2, y2, x1, y2]

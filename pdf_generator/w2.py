@@ -1,8 +1,8 @@
 import cv2
 import json
 import fitz
+import numpy as np
 from PIL import Image
-import augraphy as aug
 from pdf2image import convert_from_path
 
 from pypdf import PdfReader
@@ -13,10 +13,11 @@ from pdfminer.converter import PDFPageAggregator
 from pdfminer.layout import LAParams, LTText, LTChar, LTAnno
 from pdfminer.pdfinterp import PDFPageInterpreter, PDFResourceManager
 
-from .utils import combine_bounding_boxes
+from .augment import get_augment_pipeline
+from .utils import combine_bounding_boxes, convert_xyxy_to_8_cords
 
 class Create_W2:
-    def __init__(self):
+    def __init__(self, probability = 0.5):
         self.zoom = 3
         self.template_path = "static/fields/w2/w2.pdf"
         self.box_12_map = {'a': 'a_value', 'b': 'b_value', 'c': 'c_value', 'd': 'd_value'}        
@@ -26,6 +27,7 @@ class Create_W2:
         self.resolution_factor = 2
         self.filled_pdf_colour = (0, 0, 0)
         self.filled_pdf_fold = 'Helvetica'
+        self.aug_pipeline = get_augment_pipeline(probability=probability)
 
     def extract_text_and_bounding_boxes(self, pdf_path):
         with open(pdf_path, 'rb') as fp:
@@ -65,7 +67,7 @@ class Create_W2:
                                         bbox.append(letter.bbox)
         return bb_text
     
-    def fill_pdf(self, json_data, save_path):
+    def fill_pdf(self, json_data, save_path, save_json = True):
         box_12_dict = {}
         for key, value in self.box_12_map.items():
             box_12_dict[key] = ''
@@ -121,17 +123,24 @@ class Create_W2:
         with open(save_path, "wb+") as output:
             output.write(filled_pdf.read())
 
+        if save_json:
+            json_path = save_path.replace('.pdf', '.json')
+            with open(json_path, 'w') as json_write_file:
+                json.dump(json_data, json_write_file, indent=4)
+
         return self.extract_text_and_bounding_boxes(save_path)
 
     def pdf_to_image(self, pdf_path):
-        image_save_path = pdf_path.replace('.pdf', '.png')
         images_pil = convert_from_path(pdf_path, size = (self.width*self.resolution_factor, self.height*self.resolution_factor))
         images = []
-        for img in images_pil:
+        image_paths = []
+        for i, img in enumerate(images_pil):
+            image_save_path = pdf_path.replace('.pdf', f'_{i}.png')
             img.save(image_save_path, 'PNG')
             img = cv2.imread(image_save_path)
             images.append(img)
-        return images
+            image_paths.append(image_save_path)
+        return images, image_paths
 
     def flip_bbox(self, bbox, height):
         shift = int((bbox[3] - bbox[1]) * 0.1)
@@ -141,8 +150,8 @@ class Create_W2:
         bbox[3] = height - bbox[3] - shift
         return bbox
 
-    def augment(self, bboxes, pdf_path, output_path, probability=0.5):
-        images = self.pdf_to_image(pdf_path)
+    def augment(self, bboxes, pdf_path, output_path, save_png = True, save_txt = True, draw_bb = True):
+        images, image_paths = self.pdf_to_image(pdf_path)
 
         for idx in range(len(bboxes)):
             [x1, y1, x2, y2] = bboxes[idx]['bbox']
@@ -151,20 +160,8 @@ class Create_W2:
                                                   x2* self.resolution_factor, 
                                                   y2* self.resolution_factor], images[0].shape[0])
 
-        ink_phase = [aug.OneOf([aug.Dithering(p=probability/2),
-                                aug.InkBleed(p=probability/2)], p=probability)]
-        paper_phase = [aug.ColorPaper(p=probability/2),
-                       aug.OneOf([aug.AugmentationSequence([
-                                aug.NoiseTexturize(p=probability/2),  
-                                aug.BrightnessTexturize(p=probability/2)])
-                                ])]
-        post_phase = [aug.Markup(p=probability),
-                      aug.PageBorder(p=probability),
-                      aug.SubtleNoise(p=probability),
-                      aug.Jpeg(p=probability),
-                      aug.BleedThrough(p=probability)]
-        pipeline = aug.AugraphyPipeline(ink_phase, paper_phase, post_phase)
-        synthetic_images = [pipeline.augment(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))["output"] for image in images]
+        synthetic_images = [self.aug_pipeline.augment(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))["output"] for image in images]
+
         synthetic_images = [Image.fromarray(image).convert('RGB') for image in synthetic_images]
         if len(synthetic_images) == 1:
             synthetic_images[0].save(output_path)
@@ -172,7 +169,21 @@ class Create_W2:
             synthetic_images[0].save(output_path,
                                     save_all=True, 
                                     append_images=synthetic_images)
+        if save_png:
+            for idx, img in enumerate(synthetic_images):
+                aug_image_path = pdf_path.replace('.pdf', f'_aug_{idx}.png')
+                img.save(aug_image_path)
 
-        with open(pdf_path.replace('.pdf', '.json'), 'w') as json_write_file:
-            json.dump(bboxes, json_write_file, indent=4)
-
+        if save_txt:
+            txt_path = pdf_path.replace('.pdf', '.txt')
+            with open(txt_path, 'w') as txt_write_file:
+                for boxes in bboxes:
+                    text, bbox = boxes['text'], convert_xyxy_to_8_cords(boxes['bbox'])
+                    txt_write_file.write(','.join(list(map(str, bbox))) + "," + text + '\n')
+        if draw_bb:
+            frame = np.array(synthetic_images[0])
+            for box in bboxes:
+                x1, y1, x2, y2 = box['bbox']
+                # text = d['text']
+                cv2.rectangle(frame, (int(x1), int(y1)), (int(x2), int(y2) ), (0, 0, 255), thickness = 1)
+            cv2.imwrite(image_paths[0].replace('.png', '_with_bb.png'), frame)
