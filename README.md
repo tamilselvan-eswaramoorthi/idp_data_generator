@@ -1,4 +1,4 @@
-## Overview
+## Data Generator
 The IDP Data Generator for W2 Forms is a tool designed to create realistic  forms PDF and images. This can be particularly useful for testing, training, and development purposes of OCR systems. The generator allows you to customize various fields to different scenarios and employee data producing realistic forms.
 ## Features
 
