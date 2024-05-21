@@ -45,7 +45,7 @@ def get_augment_pipeline(probability):
         aug.AugmentationSequence([
                 aug.NoiseTexturize(
                     sigma_range=(1, 5),  # Reduced sigma range
-                    turbulence_range=(1, 3),  # Reduced turbulence range
+                    turbulence_range=(2, 3),  # Reduced turbulence range
                     p=probability/2),  
                 aug.BrightnessTexturize(
                     texturize_range=(0.95, 0.99),  # Narrower range for less brightness variation
