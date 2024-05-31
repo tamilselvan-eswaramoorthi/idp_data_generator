@@ -6,7 +6,7 @@ let selectedRect = null;
 const drawnRectangles = [];
 let isResizing = false;
 let isMoving = false;
-let resizeHandleSize = 8;
+let resizeHandleSize = 4;
 let startX, startY;
 
 document.getElementById('upload').addEventListener('change', handleFileSelect, false);
@@ -97,15 +97,24 @@ function addDrawingListeners(canvas, context) {
     }
   });
 
+  function check_box_area(width, height){
+    if (width <20 || height < 20) return false 
+    if (width * height < 200) return false 
+    return true
+  }
+
   canvas.addEventListener('mouseup', function(e) {
     if (isDrawing) {
       isDrawing = false;
       const [x, y] = getMousePos(canvas, e);
-      drawnRectangles.push({ x: startX, y: startY, width: x - startX, height: y - startY });
-      overlayContext.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
-      redrawRectangles(overlayContext, drawnRectangles);
-      document.getElementById('delete-all-button').disabled = false;
-      document.getElementById('download-button').disabled = false;
+      if (check_box_area(x - startX, y - startY))
+      {
+        drawnRectangles.push({ x: startX, y: startY, width: x - startX, height: y - startY });
+        overlayContext.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+        redrawRectangles(overlayContext, drawnRectangles);
+        document.getElementById('delete-all-button').disabled = false;
+        document.getElementById('download-button').disabled = false;
+      }
     } else if (isMoving) {
       isMoving = false;
     } else if (isResizing) {
