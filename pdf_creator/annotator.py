@@ -1,5 +1,9 @@
 import fitz
+import os.path as osp
+from glob import glob
 from PyPDFForm import PdfWrapper
+import xml.etree.ElementTree as ET
+
 
 class PDFAnnotator:
     def __init__(self) -> None:
@@ -57,13 +61,52 @@ class PDFAnnotator:
         with open(output_path, "wb+") as output:
             output.write(new_form.read())
 
+    def load_annotations(self, path):
+        field_details = {
+            "xywhs" : [],
+            "field_names" : [],
+            "max_lengths" : [],
+            "field_types" : []
+            }        
+        annots = sorted(glob(osp.join(path, 'Annotations/*.xml')))
+        images = sorted(glob(osp.join(path, 'JPEGImages/*')))
+        for annot_file, image_path in zip(annots, images):
+            tree = ET.parse(annot_file)
+            root = tree.getroot()
+
+            width = int(root.find("size/width").text)
+            height = int(root.find("size/height").text)
+
+            print(width, height)
+
+            for boxes in root.iter('object'):
+                field_type = boxes.find('name').text
+
+                ymin = int(float(boxes.find("bndbox/ymin").text))
+                xmin = int(float(boxes.find("bndbox/xmin").text))
+                ymax = int(float(boxes.find("bndbox/ymax").text))
+                xmax = int(float(boxes.find("bndbox/xmax").text))
+
+                if field_type == "textbox":
+                    field_name = boxes.find("attributes/attribute/value").text
+                    field_dict = {
+                        ""
+                    }
+                    field_details.append()
+
+                    print (field_type, field_name)
+
+
+
 annot = PDFAnnotator()
 
-details = {
-    "xywhs" : [[10, 10, 100, 10]],
-    "field_names" : ['aa'],
-    "max_lengths" : [10],
-    "field_types" : ['checkbox']
-    }
+annot.load_annotations('/home/tamilselvan/Downloads/aadhar')
 
-annot.add_editable_fields('updated.pdf', 'output.pdf', **details)
+# details = {
+#     "xywhs" : [[10, 10, 100, 10]],
+#     "field_names" : ['aa'],
+#     "max_lengths" : [10],
+#     "field_types" : ['checkbox']
+#     }
+
+# annot.add_editable_fields('updated.pdf', 'output.pdf', **details)
