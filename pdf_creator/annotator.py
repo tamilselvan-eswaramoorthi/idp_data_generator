@@ -1,6 +1,8 @@
+import os
 import fitz
 import os.path as osp
 from glob import glob
+from PIL import Image
 from PyPDFForm import PdfWrapper
 import xml.etree.ElementTree as ET
 
@@ -34,10 +36,10 @@ class PDFAnnotator:
         height = page.rect.height
         return height, width
 
-    def add_editable_fields(self, input_path, output_path, field_names, xywhs, max_lengths, field_types):
-        new_form = PdfWrapper(input_path)
+    def add_editable_fields(self, pdf_path, field_names, xywhs, max_lengths, field_types):
+        new_form = PdfWrapper(pdf_path)
 
-        height, width = self.get_height_width(input_path=input_path)
+        height, width = self.get_height_width(input_path=pdf_path)
         for idx, (xywh, field_name, field_type) in enumerate(zip(xywhs, field_names, field_types)):
             [x, y, w, h] = xywh
             y = height - y - self.font_size
@@ -50,7 +52,6 @@ class PDFAnnotator:
                     font=self.font, font_size=self.font_size, font_color=self.font_color, border_width=self.border_width
                     )
             else:
-                print ('check')
                 new_form.create_widget(
                     widget_type="checkbox",
                     x=x, y=y, width=w, height=h,
@@ -58,26 +59,30 @@ class PDFAnnotator:
                     button_style="circle", tick_color=self.font_color, border_width= self.border_width
                     )
 
-        with open(output_path, "wb+") as output:
+        with open(pdf_path, "wb+") as output:
             output.write(new_form.read())
 
+    def image_to_pdf(self, image_path, pdf_path):
+        img = Image.open(image_path)
+        img.save(pdf_path, "PDF", resolution=100.0, save_all=True)
+
     def load_annotations(self, path):
-        field_details = {
-            "xywhs" : [],
-            "field_names" : [],
-            "max_lengths" : [],
-            "field_types" : []
-            }        
+
+        all_annot_dict = []
         annots = sorted(glob(osp.join(path, 'Annotations/*.xml')))
         images = sorted(glob(osp.join(path, 'JPEGImages/*')))
+        
         for annot_file, image_path in zip(annots, images):
+
+            annot_dict = {}
             tree = ET.parse(annot_file)
             root = tree.getroot()
 
             width = int(root.find("size/width").text)
             height = int(root.find("size/height").text)
 
-            print(width, height)
+            annot_dict['image_path'] = image_path
+            annot_dict['size'] = {'width': width, 'height': height}
 
             for boxes in root.iter('object'):
                 field_type = boxes.find('name').text
@@ -87,20 +92,47 @@ class PDFAnnotator:
                 ymax = int(float(boxes.find("bndbox/ymax").text))
                 xmax = int(float(boxes.find("bndbox/xmax").text))
 
-                if field_type == "textbox":
-                    field_name = boxes.find("attributes/attribute/value").text
-                    field_dict = {
-                        ""
-                    }
-                    field_details.append()
+                coordinate = [xmin, ymin, xmax, ymax]
 
-                    print (field_type, field_name)
+                attributes = {}
+                for attribute in boxes.iter("attribute"):
+                    field_name = (attribute.find('name').text)
+                    field_value = (attribute.find('value').text)
+                    if field_value == "False":
+                        field_value = False
+                    else:
+                        field_value = True
 
+                    attributes[field_name] = field_value
+                
+                annot_dict['type'] = field_type
+                annot_dict['coordinate'] = coordinate
+                annot_dict['attributes'] = attributes
+                # print (annot_dict)
+            
+            all_annot_dict.append(annot_dict)
+        print (all_annot_dict)
+        return all_annot_dict
+    
+    def process(self, annotation_path):
+        annotations = self.load_annotations(annotation_path)
+        pdf_base_path = os.path.join(annotation_path, "pdfs")
+        
+        os.makedirs(pdf_base_path, exist_ok = True)
+        for annotation in annotations:
+            image_path = annotation['image_path']
+            image_name = os.path.basename(image_path)
+            name, ext = os.path.splitext(image_name)
+            pdf_path = os.path.join(pdf_base_path, name + '.pdf')
+            self.image_to_pdf(image_path=image_path, pdf_path=pdf_path)
+
+
+            
 
 
 annot = PDFAnnotator()
 
-annot.load_annotations('/home/tamilselvan/Downloads/aadhar')
+annot.process('/home/tamilselvan/Downloads/pan')
 
 # details = {
 #     "xywhs" : [[10, 10, 100, 10]],
