@@ -1,5 +1,3 @@
-import cv2 
-import json
 
 def combine_bounding_boxes(bounding_boxes):
     # Initialize with extreme values to find minimum and maximum coordinates
@@ -22,3 +20,12 @@ def convert_xyxy_to_8_cords(box):
     x1, y1, x2, y2 = box
     x1, y1, x2, y2 = int(x1), int(y1), int(x2), int(y2)
     return [x1, y1, x2, y1, x2, y2, x1, y2]
+
+def flip_bbox(bbox, height):
+    """Flip bounding boxes vertically."""
+    shift = int((bbox[3] - bbox[1]) * 0.1)
+    bbox[0] -= 1
+    bbox[1] = height - bbox[1] - shift
+    bbox[2] += 1
+    bbox[3] = height - bbox[3] - shift
+    return bbox

@@ -1,5 +1,5 @@
 import argparse
-from pdf_generator.w2 import CreateW2
+from pdf_creator.annotator import PDFAnnotator
 
 def main():
     # Initialize the argument parser
@@ -12,9 +12,8 @@ def main():
 
     # Parse the arguments
     args = parser.parse_args()
-
     # Use the parsed arguments
-    CreateW2(base_path='data').generate_pdfs(num_files=args.num_files, augment=args.augment)
+    PDFAnnotator(base_path=args.base_path).generate_pdfs(num_files=args.num_files, augment=args.augment)
 
 if __name__ == '__main__':
     main()
