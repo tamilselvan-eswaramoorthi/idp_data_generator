@@ -42,9 +42,9 @@ class DataGenerator:
 
                     first_only = attribute['name_type'] == 'first_name'
                     last_only = attribute['name_type'] == 'last_name'
-                    suffix = attribute.get('suffix', False)
-                    gender = attribute.get('gender', False) if attribute['gender'] in ['male', 'female'] else False
-                    indian = False  # Assumes Indian name handling is not provided in the attributes
+                    suffix = attribute.get('name_suffix', False)
+                    gender = attribute.get('name_gender', False) if attribute['name_gender'] in ['male', 'female'] else False
+                    indian = attribute.get('name_indian', False)
 
                     text_fields[field_name] = self.data_gen.get_name(
                         first_only=first_only, 
