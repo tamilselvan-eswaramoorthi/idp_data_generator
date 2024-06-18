@@ -20,15 +20,14 @@ from pdfminer.converter import PDFPageAggregator
 from pdfminer.layout import LAParams, LTText, LTChar, LTAnno
 from pdfminer.pdfinterp import PDFPageInterpreter, PDFResourceManager
 
-
-from data_generator.generator import DataGenerator 
+from data_generator.generator import DataGenerator
 
 from .augment import get_augment_pipeline
 from .utils import combine_bounding_boxes, convert_xyxy_to_8_cords, flip_bbox
 
-
 class PDFAnnotator:
-    def __init__(self, base_path, num_workers = 1) -> None:
+    def __init__(self, base_path, num_workers=1) -> None:
+        """Initialize the PDFAnnotator with the given base path and number of workers."""
         self.timeout = 10
         self.num_workers = num_workers
         self.base_path = base_path
@@ -36,30 +35,28 @@ class PDFAnnotator:
             self.setup_directories()
         self.data_gen = DataGenerator()
         self.font = 'Helvetica'
-
         self.resolution_factor = 2
-        
         self.filled_pdf_colour = (0, 0, 0)
-        self.font_size = 10
         self.font_color = (0, 0, 0)
         self.border_width = -1
-        self.formFontNames = {
-        "Helvetica"
-        "Helvetica-Bold"
-        'Courier'
-        'Courier-Bold'
-        'Courier-Oblique'
-        'Courier-BoldOblique'
-        'Helvetica-Oblique'
-        'Helvetica-BoldOblique'
-        'Times-Roman'
-        'Times-Bold'
-        'Times-Italic'
-        'Times-BoldItalic'
-        }
-        self.checkbox_style = ['check', 'cross', 'circle', 'star', 'diamond']
+        # self.formFontNames = {
+        # "Helvetica"
+        # "Helvetica-Bold"
+        # 'Courier'
+        # 'Courier-Bold'
+        # 'Courier-Oblique'
+        # 'Courier-BoldOblique'
+        # 'Helvetica-Oblique'
+        # 'Helvetica-BoldOblique'
+        # 'Times-Roman'
+        # 'Times-Bold'
+        # 'Times-Italic'
+        # 'Times-BoldItalic'
+        # }
+        # self.checkbox_style = ['check', 'cross', 'circle', 'star', 'diamond']
 
     def setup_directories(self):
+        """Set up the required directories for images, texts, JSONs, PDFs, and templates."""
         self.image_path = self.create_directory('images')
         self.text_path = self.create_directory('txts')
         self.json_path = self.create_directory('jsons')
@@ -67,12 +64,14 @@ class PDFAnnotator:
         self.template_path = self.create_directory('templates')
 
     def create_directory(self, directory_name):
+        """Create a directory if it doesn't exist and return its path."""
         path = os.path.join(self.base_path, directory_name)
         if not os.path.exists(path):
             os.mkdir(path)
         return path
 
     def get_height_width(self, input_path):
+        """Get the height and width of the first page of the PDF."""
         doc = fitz.open(input_path)
         page = doc[0]
         width = page.rect.width
@@ -80,59 +79,56 @@ class PDFAnnotator:
         return height, width
 
     def convert_bbox(self, coord, height):
+        """Convert bounding box coordinates to match PDF coordinate system."""
         x1, y1, x2, y2 = coord
         new_y1 = height - y2 - 1
         new_y2 = height - y1 - 1
-                
         return [x1, new_y1, x2, new_y2]
 
     def add_editable_fields(self, pdf_path, annotation):
+        """Add editable fields to the PDF based on provided annotations."""
         new_form = PdfWrapper(pdf_path)
-
         height, width = self.get_height_width(input_path=pdf_path)
-        scale_width, scale_height = width/annotation['size']['width'], height/annotation['size']['height']
-        for idx, field in enumerate(annotation['fields']):
+        scale_width, scale_height = width / annotation['size']['width'], height / annotation['size']['height']
+
+        for field in annotation['fields']:
             if field['type'] == 'textbox':
                 [x1, y1, x2, y2] = field['coordinate']
                 [x1, y1, x2, y2] = [x1 * scale_height, y1 * scale_width, x2 * scale_height, y2 * scale_width]
                 [x1, y1, x2, y2] = self.convert_bbox([x1, y1, x2, y2], height)
-
-                [x, y, w, h] = [x1, y1, x2-x1, y2-y1]
-
+                [x, y, w, h] = [x1, y1, x2 - x1, y2 - y1]
                 attributes = field['attributes']
 
                 new_form.create_widget(
                     widget_type="text",
                     x=x, y=y, width=w, height=h,
                     name=attributes['1_field_name'], page_number=1, max_length=float(attributes['2_max_length']),
-                    font=self.font, font_size = int(h-4),  font_color=self.font_color, border_width=self.border_width
-                    )
-     
+                    font=self.font, font_size=int(h - 4), font_color=self.font_color, border_width=self.border_width
+                )
+
         with open(pdf_path, "wb+") as output:
             output.write(new_form.read())
         return pdf_path
 
     def image_to_pdf(self, image_path, pdf_path):
+        """Convert an image to a PDF."""
         img = Image.open(image_path)
         img.save(pdf_path, "PDF", resolution=100.0, save_all=True)
         return pdf_path
-    
+
     def pdf_to_image(self, pdf_path, size, image_path):
         """Convert PDF to image."""
-        
         img = convert_from_path(pdf_path, size=(size['width'] * self.resolution_factor, size['height'] * self.resolution_factor))[0]
         img.save(image_path, 'PNG')
         return np.array(img)
-    
 
     def load_annotations(self):
-
+        """Load annotations from XML files and return a list of annotation dictionaries."""
         all_annot_dict = []
         annots = sorted(glob(osp.join(self.base_path, 'Annotations/*.xml')))
         images = sorted(glob(osp.join(self.base_path, 'JPEGImages/*')))
-        
-        for annot_file, image_path in zip(annots, images):
 
+        for annot_file, image_path in zip(annots, images):
             annot_dict = {}
             tree = ET.parse(annot_file)
             root = tree.getroot()
@@ -143,14 +139,13 @@ class PDFAnnotator:
             annot_dict['image_path'] = image_path
             annot_dict['size'] = {'width': width, 'height': height}
             fields = []
+
             for boxes in root.iter('object'):
                 field_type = boxes.find('name').text
-
                 ymin = int(float(boxes.find("bndbox/ymin").text))
                 xmin = int(float(boxes.find("bndbox/xmin").text))
                 ymax = int(float(boxes.find("bndbox/ymax").text))
                 xmax = int(float(boxes.find("bndbox/xmax").text))
-
                 coordinate = [xmin, ymin, xmax, ymax]
 
                 attributes = {}
@@ -161,15 +156,15 @@ class PDFAnnotator:
                         field_value = False
                     elif field_value == "True":
                         field_value = True
-
                     attributes[field_name] = field_value
-                
-                field = {'type' : field_type, 'coordinate' : coordinate, 'attributes' : attributes}
+
+                field = {'type': field_type, 'coordinate': coordinate, 'attributes': attributes}
                 fields.append(field)
             annot_dict['fields'] = fields
-        all_annot_dict.append(annot_dict)
+            all_annot_dict.append(annot_dict)
+
         return all_annot_dict
-    
+
     def extract_text_and_bounding_boxes(self, pdf_path):
         """Extract text and bounding boxes from a PDF file."""
         with open(pdf_path, 'rb') as fp:
@@ -210,7 +205,6 @@ class PDFAnnotator:
 
     def fill_pdf(self, form_fields, current_template_path, save_json_path, save_pdf_path):
         """Fill the PDF form with given data and save it."""
-
         pdf_dict = {}
         checkbox_fields = []
 
@@ -229,10 +223,9 @@ class PDFAnnotator:
                 elif field_type == '/Btn':
                     checkbox_fields.append(field.get('/T'))
 
-        #handles fields
+        # Handles text fields
         filler_dict = form_fields['textbox']
-
-        # #handles checkboxes
+        # Handles checkboxes
         # filler_dict.update({field_text: field_value for field_text, field_value in zip(checkbox_fields, form_fields['button_details'].values())})
 
         filled_pdf = PdfWrapper(current_template_path, global_font_color=self.filled_pdf_colour, global_font=self.font).fill(filler_dict)
@@ -244,9 +237,8 @@ class PDFAnnotator:
             json.dump(form_fields, json_write_file, indent=4)
 
         return self.extract_text_and_bounding_boxes(save_pdf_path)
-    
+
     def generate_pdf(self, index, current_template_path, annotation, probability=0.5, augment=True, save_txt=True, draw_bb=False):
-        
         """Generate the PDF with filled data, optionally apply augmentations, and save results."""
         current_name = osp.basename(current_template_path).replace('.pdf', f'_{index}')
         save_json_path = osp.join(self.json_path, current_name + '.json')
@@ -287,22 +279,24 @@ class PDFAnnotator:
             cv2.imwrite(image_path, draw_image)
 
     def generate_pdfs(self, num_files=5, augment=True, draw_bb=False):
+        """Generate multiple PDFs using the annotations, optionally applying augmentations and drawing bounding boxes."""
         annotations = self.load_annotations()
-        
+
         with concurrent.futures.ThreadPoolExecutor(max_workers=self.num_workers) as executor:
             for annotation in annotations:
                 template_filename = osp.splitext(osp.basename(annotation['image_path']))[0]
                 current_template_path = self.image_to_pdf(annotation['image_path'], osp.join(self.template_path, template_filename + '.pdf'))
                 current_template_path = self.add_editable_fields(current_template_path, annotation)
                 for i in tqdm(range(num_files)):
-                    future = executor.submit(self.generate_pdf, 
-                                             index = i, 
-                                             current_template_path = current_template_path, 
-                                             annotation = annotation, 
-                                             augment = augment, 
-                                             draw_bb=draw_bb)
+                    future = executor.submit(
+                        self.generate_pdf, 
+                        index=i, 
+                        current_template_path=current_template_path, 
+                        annotation=annotation, 
+                        augment=augment, 
+                        draw_bb=draw_bb
+                    )
                     try:
                         future.result(timeout=self.timeout)
                     except concurrent.futures.TimeoutError:
                         print(f"Skipping file {i} as it took more than {self.timeout} seconds to process")
-
